@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>3D 체스 — AI와 한 판</title>
+<meta name="description" content="대리석 기물이 놓인 3D 체스판에서 AI와 대국하세요.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%99%9E%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{ "imports": { "three": "./vendor/three.module.min.js", "three/addons/": "./vendor/addons/" } }
+</script>
+</head>
+<body>
+<div id="app">
+  <div id="stageWrap">
+    <div id="stage"></div>
+    <div id="hud">
+      <div id="status" role="status" aria-live="polite"><span class="dot"></span><span id="statusText">준비 중…</span></div>
+      <div id="viewBtns" role="group" aria-label="시점">
+        <button data-view="white" class="on">백 시점</button>
+        <button data-view="black">흑 시점</button>
+        <button data-view="top">위에서</button>
+        <button data-view="side">옆에서</button>
+      </div>
+    </div>
+    <div id="result" role="alertdialog" aria-live="assertive">
+      <div class="card">
+        <h2 id="resTitle"></h2>
+        <p id="resText"></p>
+        <div class="row">
+          <button class="btn primary" id="resAgain">한 판 더</button>
+          <button class="btn" id="resView">판 구경하기</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <aside id="panel">
+    <div class="brand"><h1>3D 체스</h1><span class="lv" id="lvLabel"></span></div>
+
+    <div class="side" id="sideAI">
+      <div class="av">♞</div>
+      <div class="nm">체스 AI<small id="aiNote">대기 중</small></div>
+      <div class="adv" id="advAI"></div>
+      <div class="caps" id="capsAI"></div>
+    </div>
+
+    <div class="moves">
+      <h2>기보</h2>
+      <div id="moveList"><div class="empty">첫 수를 두면 여기에 기록돼요.</div></div>
+    </div>
+
+    <div class="side" id="sideMe">
+      <div class="av">♚</div>
+      <div class="nm">나<small id="meNote">—</small></div>
+      <div class="adv" id="advMe"></div>
+      <div class="caps" id="capsMe"></div>
+    </div>
+
+    <div class="actions">
+      <button class="btn" id="btnUndo">↶ 무르기</button>
+      <button class="btn" id="btnHint">💡 힌트</button>
+      <button class="btn primary" id="btnNew">새 게임</button>
+      <button class="btn danger" id="btnResign">기권</button>
+    </div>
+    <div class="switch"><span>효과음</span><button id="swSound" aria-pressed="true" aria-label="효과음"></button></div>
+  </aside>
+</div>
+
+<div id="menu" class="modal show">
+  <div class="card">
+    <h1>3D 체스</h1>
+    <p class="sub">대리석 기물로 AI와 한 판 두어 보세요.</p>
+    <h3>AI 난이도</h3>
+    <div class="seg five" id="segLevel"></div>
+    <div class="desc" id="levelDesc"></div>
+    <h3>내 색깔</h3>
+    <div class="seg three" id="segColor">
+      <button data-c="white">백 (선공)</button>
+      <button data-c="black">흑</button>
+      <button data-c="random">랜덤</button>
+    </div>
+    <button class="btn primary go" id="btnStart">대국 시작</button>
+  </div>
+</div>
+
+<div id="promo" class="modal">
+  <div class="card">
+    <h3 style="margin-top:0;font-size:15px;color:var(--text)">폰이 끝까지 도착했어요! 무엇으로 바꿀까요?</h3>
+    <div class="promo" id="promoBtns"></div>
+  </div>
+</div>
+
+<div id="loading">
+  <div class="in"><div class="k">♞</div><p id="loadText">불러오는 중…</p><div id="fatal"></div></div>
+</div>
+
+<script type="module" src="main.js"></script>
+</body>
+</html>
