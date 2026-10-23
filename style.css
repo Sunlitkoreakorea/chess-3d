@@ -156,3 +156,23 @@ button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
   #status { left: 10px; top: 10px; font-size: 13.5px; }
   .card { padding: 22px 18px 18px; } .card h1 { font-size: 28px; }
 }
+
+/* 연출 오버레이 */
+#flash, #vignette { position: absolute; inset: 0; pointer-events: none; z-index: 13; }
+#flash { opacity: 0; mix-blend-mode: screen; }
+#vignette { opacity: 0; transition: opacity 1.2s ease; background: radial-gradient(ellipse at 50% 48%, rgba(0, 0, 0, 0) 38%, rgba(70, 0, 8, 0.72) 100%); }
+#vignette.on { opacity: 1; }
+
+#banner { position: absolute; left: 50%; top: 20%; transform: translateX(-50%); z-index: 16; pointer-events: none; text-align: center; opacity: 0; width: max-content; max-width: calc(100% - 24px); }
+#banner .b-main { font-family: var(--serif); font-weight: 800; font-size: clamp(22px, 4.4vw, 46px); letter-spacing: 0.02em; color: #ffe9a8; text-shadow: 0 0 18px rgba(255, 190, 70, 0.9), 0 3px 0 rgba(90, 50, 0, 0.8), 0 8px 24px rgba(0, 0, 0, 0.6); }
+#banner .b-sub { margin-top: 6px; font-size: clamp(13px, 2.2vw, 20px); letter-spacing: 0.38em; color: #fff6dc; text-shadow: 0 0 12px rgba(255, 210, 120, 0.9); }
+#banner.show { animation: bannerIn 2.8s cubic-bezier(0.2, 0.9, 0.25, 1) forwards; }
+#banner.t4 .b-main { font-size: clamp(26px, 5.6vw, 60px); color: #fff3c2; text-shadow: 0 0 26px rgba(255, 170, 40, 1), 0 0 60px rgba(255, 120, 20, 0.7), 0 4px 0 rgba(110, 50, 0, 0.9), 0 10px 30px rgba(0, 0, 0, 0.7); }
+#banner.t4.show { animation: bannerInBig 3.4s cubic-bezier(0.2, 0.9, 0.25, 1) forwards; }
+@keyframes bannerIn { 0% { opacity: 0; transform: translateX(-50%) scale(1.5); filter: blur(8px); } 14% { opacity: 1; transform: translateX(-50%) scale(1); filter: blur(0); } 78% { opacity: 1; } 100% { opacity: 0; transform: translateX(-50%) translateY(-14px) scale(0.98); } }
+@keyframes bannerInBig { 0% { opacity: 0; transform: translateX(-50%) scale(2.4); filter: blur(14px); } 10% { opacity: 1; transform: translateX(-50%) scale(0.94); filter: blur(0); } 16% { transform: translateX(-50%) scale(1.04); } 22% { transform: translateX(-50%) scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translateX(-50%) translateY(-18px) scale(0.98); } }
+
+#mateBanner { position: absolute; left: 50%; top: 42%; z-index: 17; pointer-events: none; opacity: 0; transform: translate(-50%, -50%); font-family: var(--serif); font-weight: 900; font-size: clamp(40px, 10vw, 118px); letter-spacing: 0.08em; white-space: nowrap; color: #fff1c9; text-shadow: 0 0 30px rgba(255, 90, 60, 0.95), 0 0 80px rgba(255, 40, 40, 0.7), 0 6px 0 rgba(90, 0, 0, 0.85), 0 14px 36px rgba(0, 0, 0, 0.8); }
+#mateBanner.show { animation: mateIn 3.6s cubic-bezier(0.2, 0.9, 0.25, 1) forwards; }
+@keyframes mateIn { 0% { opacity: 0; transform: translate(-50%, -50%) scale(3); letter-spacing: 0.4em; filter: blur(18px); } 12% { opacity: 1; transform: translate(-50%, -50%) scale(0.92); letter-spacing: 0.08em; filter: blur(0); } 20% { transform: translate(-50%, -50%) scale(1.05); } 28% { transform: translate(-50%, -50%) scale(1); } 74% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -58%) scale(1.04); } }
+@media (max-width: 860px) { #banner { top: 16%; } }

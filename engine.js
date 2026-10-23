@@ -182,6 +182,30 @@ export class Position {
     return false;
   }
 
+  // sq 를 공격하고 있는 by 색 기물들의 칸 (체크메이트 연출에서 "왕을 노리는 기물"을 보여 줄 때 쓴다)
+  attackersOf(sq, by) {
+    const b = this.board, out = [];
+    const sh = by << 3;
+    const pawn = PAWN | sh;
+    for (const s of by === WHITE ? [sq - 15, sq - 17] : [sq + 15, sq + 17]) if (!(s & 0x88) && b[s] === pawn) out.push(s);
+    for (let i = 0; i < 8; i++) {
+      let s = sq + KNIGHT_OFF[i]; if (!(s & 0x88) && b[s] === (KNIGHT | sh)) out.push(s);
+      s = sq + KING_OFF[i]; if (!(s & 0x88) && b[s] === (KING | sh)) out.push(s);
+    }
+    const bi = BISHOP | sh, ro = ROOK | sh, qu = QUEEN | sh;
+    for (let i = 0; i < 4; i++) {
+      for (const [d, a] of [[BISHOP_DIR[i], bi], [ROOK_DIR[i], ro]]) {
+        let s = sq + d;
+        while (!(s & 0x88)) {
+          const pc = b[s];
+          if (pc) { if (pc === a || pc === qu) out.push(s); break; }
+          s += d;
+        }
+      }
+    }
+    return out;
+  }
+
   inCheck(side = this.turn) { return this.isAttacked(this.kingSq[side], side ^ 1); }
 
   // 의사 합법수 생성. list[off..] 에 채우고 끝 인덱스를 돌려준다.

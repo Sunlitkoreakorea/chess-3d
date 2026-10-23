@@ -7,6 +7,7 @@ import { LEVELS } from './levels.js';
 import { Stage } from './stage.js';
 import { AI } from './ai.js';
 import { Sound } from './sound.js';
+import { captureTier, captureBanner } from './fx.js';
 
 const $ = (id) => document.getElementById(id);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -107,6 +108,25 @@ function refreshStatus() {
   else setStatus(`내 차례 (${G.human === WHITE ? '백' : '흑'})`);
 }
 
+// 큰 잡기·체크메이트 배너 (CSS 애니메이션을 처음부터 다시 돌린다)
+function restart(el, cls) {
+  el.className = '';
+  void el.offsetWidth;
+  el.className = cls;
+}
+function showBanner({ main, sub, tier }) {
+  const el = $('banner');
+  el.querySelector('.b-main').textContent = main;
+  el.querySelector('.b-sub').textContent = sub;
+  restart(el, `show t${tier}`);
+}
+function showMateBanner() { restart($('mateBanner'), 'show'); }
+function clearFx() {
+  $('banner').className = ''; $('mateBanner').className = '';
+  stage.fx.vignette(false);
+  stage.controls.autoRotate = false;
+}
+
 // ───────────────────────── 선택·이동 ─────────────────────────
 function clearSelection() {
   G.selected = -1; G.targets = [];
@@ -165,17 +185,28 @@ async function applyMove(m) {
   G.busy = true; clearHint(); clearSelection(); updateButtons();
   const san = G.pos.san(m);
   const fl = mFlags(m);
+  // 잡는 수라면 어떤 기물이 무엇을 잡는지에 따라 연출 등급이 정해진다
+  const isCap = !!(fl & F_CAP);
+  const attacker = G.pos.board[mFrom(m)] & 7;
+  const victim = isCap ? ((fl & 2) ? PAWN : G.pos.board[mTo(m)] & 7) : 0;   // 2 = 앙파상
+  const tier = isCap ? captureTier(attacker, victim) : 0;
   G.pos.makeMove(m);
   G.moves.push(m); G.sans.push(san);
   renderMoves();
-  const check = san.endsWith('+') || san.endsWith('#');
-  await stage.animateMove(m, () => {
-    if (mPromo(m)) sound.promote();
-    else if (fl & F_CAP) sound.capture();
-    else if (fl & F_CASTLE) sound.castle();
-    else sound.move();
-    if (check) setTimeout(() => sound.check(), 120);
-    stage.setLastMove(mFrom(m), mTo(m));
+  const check = san.endsWith('+');
+  await stage.animateMove(m, {
+    fx: isCap ? { tier } : null,
+    onImpact: () => {
+      sound.impact(tier, attacker);
+      const b = captureBanner(attacker, victim, tier);
+      if (b) showBanner(b);
+    },
+    onLand: () => {
+      if (mPromo(m)) sound.promote();
+      else if (!isCap) { if (fl & F_CASTLE) sound.castle(); else sound.move(); }
+      if (check) setTimeout(() => sound.check(), 120);
+      stage.setLastMove(mFrom(m), mTo(m));
+    },
   });
   G.lastMove = m;
   stage.setCheck(G.pos.inCheck() ? G.pos.kingSq[G.pos.turn] : -1);
@@ -202,6 +233,7 @@ async function aiMove() {
 }
 
 async function finish(st) {
+  const token = G.token;
   G.over = true; G.thinking = false; updateButtons();
   const winner = st.result === '1-0' ? WHITE : st.result === '0-1' ? BLACK : -1;
   const humanWon = winner === G.human;
@@ -221,8 +253,14 @@ async function finish(st) {
   setStatus(title, 'over');
   if (st.reason === 'checkmate') {
     stage.setCheck(-1);
-    await stage.topple(G.pos.kingSq[winner ^ 1]);
-    await sleep(250);
+    const loserKing = G.pos.kingSq[winner ^ 1];
+    showMateBanner();
+    sound.mate();
+    await stage.mate({
+      kingSq: loserKing, attackers: G.pos.attackersOf(loserKing, winner), winner, humanWon,
+      onGround: () => sound.thud(),
+    });
+    if (token !== G.token) return;     // 연출 도중 새 판·무르기를 눌렀다면 이어 가지 않는다
   }
   if (winner < 0) sound.draw(); else if (humanWon) sound.win(); else sound.lose();
   $('resTitle').textContent = title;
@@ -234,7 +272,7 @@ async function finish(st) {
 async function undo() {
   if (G.busy || !G.started || G.moves.length === 0) return;
   G.token++; ai.cancel(); G.thinking = false; clearHint(); clearSelection();
-  $('result').classList.remove('show');
+  $('result').classList.remove('show'); clearFx();
   let n = G.pos.turn === G.human ? 2 : 1;
   n = Math.min(n, G.moves.length);
   for (let i = 0; i < n; i++) { G.pos.unmakeMove(); G.moves.pop(); G.sans.pop(); }
@@ -292,7 +330,7 @@ function startGame() {
   G.started = true; G.lastMove = null;
   clearHint(); clearSelection();
   $('menu').classList.remove('show'); $('result').classList.remove('show'); $('promo').classList.remove('show');
-  stage.controls.autoRotate = false;
+  clearFx();
   stage.setPosition(G.pos, { intro: true });
   stage.setFlipped(G.human === BLACK);
   stage.setLastMove(-1, -1); stage.setCheck(-1);
@@ -398,8 +436,8 @@ async function boot() {
   $('btnUndo').onclick = undo;
   $('btnHint').onclick = hint;
   $('btnResign').onclick = resign;
-  $('resAgain').onclick = () => { $('result').classList.remove('show'); openMenu(); };
-  $('resView').onclick = () => { $('result').classList.remove('show'); };
+  $('resAgain').onclick = () => { $('result').classList.remove('show'); clearFx(); openMenu(); };
+  $('resView').onclick = () => { $('result').classList.remove('show'); stage.fx.vignette(false); stage.controls.autoRotate = false; };
   stage.controls.autoRotate = true;
   stage.setPosition(new Position(), { intro: true });
   setStatus('난이도를 고르고 시작하세요');

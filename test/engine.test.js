@@ -67,3 +67,11 @@ test('3회 반복 판정', () => {
   assert.equal(pos.repetitionCount(), 3);
   assert.equal(pos.status().reason, 'repetition');
 });
+
+test('attackersOf: 왕을 노리는 기물 목록', () => {
+  const pos = new Position('6k1/5ppp/8/8/8/8/8/R3K3 b - - 0 1');
+  pos.setFEN('R5k1/5ppp/8/8/8/8/8/6K1 b - - 0 1');
+  assert.deepEqual(pos.attackersOf(pos.kingSq[1], 0), [nameSq('a8')]);
+  const two = new Position('4k3/8/8/1B6/8/8/8/4RK2 b - - 0 1');
+  assert.deepEqual(two.attackersOf(two.kingSq[1], 0).sort(), [nameSq('b5'), nameSq('e1')].sort());
+});

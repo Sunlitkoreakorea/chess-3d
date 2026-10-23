@@ -4,6 +4,7 @@ import { OrbitControls } from 'three/addons/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/RoomEnvironment.js';
 import { RoundedBoxGeometry } from 'three/addons/RoundedBoxGeometry.js';
 import { createPieceKit } from './pieces.js';
+import { Effects } from './fx.js';
 import {
   boardTextures, woodTexture, tableTexture, labelTexture,
   glowTexture, ringTexture, squareGlowTexture,
@@ -43,6 +44,8 @@ export class Stage {
     this.time = 0;
     this.hoverSq = -1;
     this.flipped = false;
+    this.timeScale = 1;        // 슬로모션 배율 (1 = 보통)
+    this.slowLeft = 0;         // 슬로모션이 남은 실제 시간(초)
   }
 
   async init(onProgress = () => {}) {
@@ -79,6 +82,7 @@ export class Stage {
     this.buildBoard();
     onProgress('조명을 맞추는 중…'); await nextFrame();
     this.buildHighlights();
+    this.fx = new Effects(this);
 
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -252,7 +256,7 @@ export class Stage {
       const tg = t0.clone().lerp(target, e);
       ctl.target.copy(tg);
       c.position.copy(tg).add(new THREE.Vector3().setFromSpherical(sp));
-    });
+    }, null, true);
   }
 
   // 흑으로 두면 글자가 거꾸로 보이지 않게 돌려 준다
@@ -262,18 +266,26 @@ export class Stage {
   }
 
   // ───────── 트윈 ─────────
-  tween(dur, fn, ease = (k) => k) {
+  // real=true 이면 슬로모션과 상관없이 실제 시간으로 흐른다 (카메라, 연출 타이밍)
+  tween(dur, fn, ease, real = false) {
     return new Promise((resolve) => {
-      this.tweens.push({ t: 0, dur, fn, ease, resolve });
+      this.tweens.push({ t: 0, dur, fn, ease: ease || ((k) => k), resolve, real });
     });
   }
-  wait(sec) { return this.tween(sec, () => {}); }
+  wait(sec, real = false) { return this.tween(sec, () => {}, null, real); }
+
+  // 잠깐 느리게: scale 배율로 realSec 초 동안, 그 뒤 부드럽게 원래 속도로
+  slowmo(scale, realSec) { this.timeScale = scale; this.slowLeft = realSec; }
 
   frame() {
     const raw = this.clock.getDelta();
     this.adaptQuality(raw);
-    this.advance(Math.min(0.05, raw));
+    const rdt = Math.min(0.05, raw);
+    this.advance(rdt);
+    const off = this.fx.shakeOffset(rdt);         // 카메라 흔들림은 그리는 순간에만 얹는다
+    this.camera.position.add(off);
     this.renderer.render(this.scene, this.camera);
+    this.camera.position.sub(off);
   }
 
   // 프레임이 계속 느리면 해상도를 한 단계씩 낮춰서 부드러움을 지킨다 (다시 올리지는 않는다)
@@ -293,11 +305,15 @@ export class Stage {
   }
 
   // 시간을 dt초만큼 앞으로 (화면 그리기와 분리해 두면 가려진 창에서도 테스트로 돌릴 수 있다)
-  advance(dt) {
+  advance(rdt) {
+    if (this.slowLeft > 0) this.slowLeft -= rdt;
+    else if (this.timeScale < 1) this.timeScale = Math.min(1, this.timeScale + rdt * 1.6);
+    const dt = rdt * this.timeScale;
     this.time += dt;
+    this.fx.update(dt);
     for (let i = this.tweens.length - 1; i >= 0; i--) {
       const tw = this.tweens[i];
-      tw.t += dt;
+      tw.t += tw.real ? rdt : dt;
       const k = Math.min(1, tw.t / tw.dur);
       tw.fn(tw.ease(k), k);
       if (k >= 1) { this.tweens.splice(i, 1); tw.resolve(); }
@@ -335,6 +351,8 @@ export class Stage {
 
   // Position 의 판 상태 그대로 기물을 다시 세운다 (처음 시작, 무르기)
   setPosition(pos, { intro = false } = {}) {
+    this.fx.reset();
+    this.timeScale = 1; this.slowLeft = 0;
     this.clearPieces();
     const b = pos.board;
     const counts = [{ 1: 8, 2: 2, 3: 2, 4: 2, 5: 1, 6: 1 }, { 1: 8, 2: 2, 3: 2, 4: 2, 5: 1, 6: 1 }];
@@ -373,7 +391,7 @@ export class Stage {
     return new THREE.Vector3(side * (5.65 + col * 0.62), TABLE_Y, 3.2 - row * 0.58);
   }
 
-  sendToGrave(holder, color, animate = true) {
+  sendToGrave(holder, color, animate = true, { arc = 1.5, spin = 0.6, dur = 0.75 } = {}) {
     const idx = this.grave[color].length;
     this.grave[color].push(holder);
     holder.userData.sq = -1;
@@ -385,16 +403,20 @@ export class Stage {
       return Promise.resolve();
     }
     const p0 = holder.position.clone(), s0 = holder.scale.x;
-    return this.tween(0.75, (k) => {
+    return this.tween(dur, (k) => {
       const e = easeInOut(k);
-      holder.position.set(p0.x + (slot.x - p0.x) * e, p0.y + (slot.y - p0.y) * e + Math.sin(Math.PI * k) * 1.5, p0.z + (slot.z - p0.z) * e);
+      holder.position.set(p0.x + (slot.x - p0.x) * e, p0.y + (slot.y - p0.y) * e + Math.sin(Math.PI * k) * arc, p0.z + (slot.z - p0.z) * e);
       holder.scale.setScalar(s0 + (S - s0) * e);
-      holder.rotation.y = Math.sin(k * Math.PI) * 0.6;
+      holder.rotation.y = Math.sin(k * Math.PI) * spin;
+      holder.rotation.x = Math.sin(k * Math.PI) * spin * 0.8;
+      if (k >= 1) holder.rotation.set(0, 0, 0);
     });
   }
 
   // 한 수를 보여 준다. (엔진 규칙대로 이미 합법으로 확인된 수)
-  async animateMove(m, onLand) {
+  // opts: { fx: {tier, attacker}, onImpact, onLand }
+  async animateMove(m, opts = {}) {
+    const { onLand, onImpact, fx } = opts;
     const from = mFrom(m), to = mTo(m), fl = mFlags(m), promo = mPromo(m);
     const mover = this.pieces.get(from);
     if (!mover) { return; }
@@ -419,9 +441,13 @@ export class Stage {
     const moverTask = this.tween(dur, (k) => {
       const e = easeInOut(k);
       mover.position.set(x0 + (x1 - x0) * e, Math.sin(Math.PI * k) * jump, z0 + (z1 - z0) * e);
-      if (victim && !victimStarted && k > 0.72) {
+      if (victim && !victimStarted && k > 0.9) {
         victimStarted = true;
-        tasks.push(this.sendToGrave(victim, victim.userData.color, true));
+        const tier = fx ? fx.tier : 0;
+        // 큰 임팩트일수록 잡힌 기물이 더 높이, 더 세게 날아간다
+        tasks.push(this.sendToGrave(victim, victim.userData.color, true, { arc: 1.5 + 0.9 * tier, spin: 0.6 + 0.7 * tier, dur: 0.75 + 0.1 * tier }));
+        if (fx) this.fx.impact({ sq: to, from, attacker: type, color, tier });
+        onImpact?.();
       }
     });
     tasks.push(moverTask);
@@ -452,25 +478,36 @@ export class Stage {
       await this.tween(0.45, (k) => { np.scale.setScalar(Math.max(0.01, easeOutBack(k))); });
       np.scale.setScalar(1);
     } else {
-      // 착지할 때 살짝 눌렸다 올라온다
-      await this.tween(0.12, (k) => { mover.scale.y = 1 - Math.sin(Math.PI * k) * 0.03; });
+      // 착지할 때 살짝 눌렸다 올라온다 (큰 임팩트일수록 더 크게)
+      const squash = 0.03 + 0.02 * (fx ? fx.tier : 0);
+      await this.tween(0.14, (k) => { mover.scale.y = 1 - Math.sin(Math.PI * k) * squash; });
       mover.scale.y = 1;
     }
   }
 
   // 체크메이트 당한 왕이 받침 가장자리를 축으로 쓰러진다
-  async topple(sq) {
+  async topple(sq, { onFrame, onGround } = {}) {
     const h = this.pieces.get(sq);
     if (!h) return;
     const d = h.userData.color === 0 ? -1 : 1;   // 백은 -z, 흑은 +z 쪽으로
-    const R = 0.4, z0 = h.position.z;
+    const R = 0.4, z0 = h.position.z, x0 = h.position.x;
+    const up = new THREE.Vector3(), top = new THREE.Vector3();
     await this.tween(0.9, (k) => {
       const th = (k * k * (3 - 2 * k)) * (Math.PI / 2) * 0.98;
       h.rotation.x = d * th;
       h.position.y = R * Math.sin(th);
       h.position.z = z0 + d * R * (1 - Math.cos(th));
+      if (onFrame) {
+        // 왕관 위치: 받침에서 위로 약 2.0 만큼 (기울어진 방향 따라)
+        up.set(0, Math.cos(th), d * Math.sin(th));
+        top.set(x0, h.position.y, h.position.z).addScaledVector(up, 1.95);
+        onFrame(top);
+      }
     });
+    onGround?.(x0, h.position.z + d * 0.9);
   }
+
+  mate(info) { return this.fx.mate(info); }
 
   // ───────── 표시 ─────────
   placeSq(mesh, sq) {
